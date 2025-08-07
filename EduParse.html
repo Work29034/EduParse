@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduParse - Smart PDF to CSV Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        :root {
+            --primary: #0099cc;
+            --secondary: #7b2cbf;
+            --accent: #38b000;
+            --light: #f8f9fa;
+            --dark: #212529;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #f5f7fa;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .icon-container {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+        
+        .document {
+            position: absolute;
+            width: 60px;
+            height: 80px;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .document::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 15px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 4px 4px 0 0;
+        }
+        
+        .document:nth-child(1) {
+            transform: rotate(-5deg) translateY(0);
+            z-index: 3;
+        }
+        
+        .document:nth-child(2) {
+            transform: rotate(2deg) translateY(5px);
+            z-index: 2;
+            opacity: 0.8;
+        }
+        
+        .document:nth-child(3) {
+            transform: rotate(8deg) translateY(10px);
+            z-index: 1;
+            opacity: 0.6;
+        }
+        
+        .grid-lines {
+            position: absolute;
+            width: 40px;
+            height: 60px;
+            top: 25px;
+            left: 10px;
+            background: 
+                linear-gradient(to bottom, transparent 95%, rgba(0,0,0,0.1) 95%),
+                linear-gradient(to right, transparent 95%, rgba(0,0,0,0.1) 95%);
+            background-size: 100% 20px, 25% 100%;
+            z-index: 4;
+        }
+        
+        .arrow {
+            position: absolute;
+            right: -20px;
+            top: 30px;
+            color: var(--accent);
+            font-size: 24px;
+            z-index: 5;
+        }
+        
+        .dropzone {
+            border: 2px dashed var(--primary);
+            transition: all 0.3s;
+        }
+        
+        .dropzone.active {
+            border-color: var(--accent);
+            background-color: rgba(0, 153, 204, 0.05);
+        }
+        
+        .file-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar {
+            height: 6px;
+            background-color: #e9ecef;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.3s ease;
+        }
+        
+        .nav-link {
+            position: relative;
+        }
+        
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--primary);
+            transition: width 0.3s;
+        }
+        
+        .nav-link:hover::after {
+            width: 100%;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @media (max-width: 768px) {
+            .icon-container {
+                width: 60px;
+                height: 60px;
+            }
+            
+            .document {
+                width: 45px;
+                height: 60px;
+            }
+            
+            .grid-lines {
+                width: 30px;
+                height: 45px;
+                top: 15px;
+            }
+            
+            .arrow {
+                right: -15px;
+                top: 20px;
+                font-size: 18px;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header/Navigation -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="icon-container">
+                    <div class="document"></div>
+                    <div class="document"></div>
+                    <div class="document"></div>
+                    <div class="grid-lines"></div>
+                    <div class="arrow"><i class="fas fa-arrow-right"></i></div>
+                </div>
+                <h1 class="text-2xl font-bold">
+                    <span class="text-[#0099cc]">Edu</span><span class="text-[#7b2cbf]">Parse</span>
+                </h1>
+            </div>
+            <nav class="hidden md:flex space-x-8">
+                <a href="#features" class="nav-link text-gray-700 hover:text-[#0099cc]">Features</a>
+                <a href="#how-it-works" class="nav-link text-gray-700 hover:text-[#0099cc]">How It Works</a>
+                <a href="#dashboard" class="nav-link text-gray-700 hover:text-[#0099cc]">Dashboard</a>
+                <a href="#contact" class="nav-link text-gray-700 hover:text-[#0099cc]">Contact</a>
+            </nav>
+            <button class="md:hidden text-gray-700">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="py-16 md:py-24 bg-gradient-to-r from-[#f5f7fa] to-[#e4e9f2]">
+        <div class="container mx-auto px-4 flex flex-col md:flex-row items-center">
+            <div class="md:w-1/2 mb-10 md:mb-0">
+                <h1 class="text-4xl md:text-5xl font-bold mb-6">
+                    <span class="gradient-text">Transform PDFs</span> into Perfect CSVs
+                </h1>
+                <p class="text-lg text-gray-600 mb-8">
+                    EduParse intelligently converts academic PDFs into structured CSV files, 
+                    auto-filling missing data and organizing information with AI-powered precision.
+                </p>
+                <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                    <button id="uploadBtn" class="bg-[#0099cc] hover:bg-[#0077aa] text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 flex items-center justify-center">
+                        <i class="fas fa-upload mr-2"></i> Upload PDF Now
+                    </button>
+                    <button class="border-2 border-[#0099cc] text-[#0099cc] hover:bg-[#0099cc] hover:text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 flex items-center justify-center">
+                        <i class="fas fa-play-circle mr-2"></i> Watch Demo
+                    </button>
+                </div>
+            </div>
+            <div class="md:w-1/2 flex justify-center">
+                <div class="relative w-full max-w-md">
+                    <div class="relative bg-white p-8 rounded-xl shadow-xl">
+                        <div class="flex flex-col items-center text-center">
+                            <div class="w-20 h-20 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mb-4">
+                                <i class="fas fa-file-export text-[#0099cc] text-3xl"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold mb-2">Simple PDF to CSV Conversion</h3>
+                            <p class="text-gray-600 mb-4">Upload your academic PDF and get a perfectly structured CSV file</p>
+                            <div class="w-full">
+                                <div class="flex justify-between mb-1">
+                                    <span class="text-sm font-medium text-gray-700">Processing Steps:</span>
+                                </div>
+                                <div class="space-y-2">
+                                    <div class="flex items-center">
+                                        <div class="w-6 h-6 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mr-2">
+                                            <i class="fas fa-check text-[#0099cc] text-xs"></i>
+                                        </div>
+                                        <span class="text-sm">Upload PDF document</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-6 h-6 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mr-2">
+                                            <i class="fas fa-check text-[#0099cc] text-xs"></i>
+                                        </div>
+                                        <span class="text-sm">Automatic field detection</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-6 h-6 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mr-2">
+                                            <i class="fas fa-check text-[#0099cc] text-xs"></i>
+                                        </div>
+                                        <span class="text-sm">Data validation & completion</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-6 h-6 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mr-2">
+                                            <i class="fas fa-check text-[#0099cc] text-xs"></i>
+                                        </div>
+                                        <span class="text-sm">Download structured CSV</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
+            <div class="flex justify-between items-center border-b p-4">
+                <h3 class="text-xl font-bold text-gray-800">Upload Academic PDF</h3>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <form id="uploadForm" enctype="multipart/form-data">
+                    <div id="dropzone" class="dropzone rounded-lg p-8 text-center cursor-pointer mb-6">
+                        <div class="mx-auto w-16 h-16 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mb-4">
+                            <i class="fas fa-cloud-upload-alt text-[#0099cc] text-2xl"></i>
+                        </div>
+                        <h4 class="text-lg font-semibold text-gray-800 mb-1">Drag & drop your PDF here</h4>
+                        <p class="text-gray-500 mb-4">or</p>
+                        <label for="fileInput" class="bg-[#0099cc] hover:bg-[#0077aa] text-white font-semibold py-2 px-4 rounded-lg inline-block cursor-pointer">
+                            Browse Files
+                        </label>
+                        <input id="fileInput" type="file" name="pdf" accept=".pdf" class="hidden" required>
+                        <p class="text-xs text-gray-500 mt-3">Supports PDF files only (max 10MB)</p>
+                    </div>
+                    <div id="fileInfo" class="hidden mb-6">
+                        <div class="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                            <div class="flex items-center">
+                                <i class="fas fa-file-pdf text-red-500 mr-3 text-xl"></i>
+                                <div>
+                                    <p id="fileName" class="font-medium"></p>
+                                    <p id="fileSize" class="text-sm text-gray-500"></p>
+                                </div>
+                            </div>
+                            <button id="removeFile" class="text-gray-500 hover:text-red-500">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-6">
+                        <label for="documentType" class="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+                        <select id="documentType" name="documentType" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0099cc] focus:border-transparent">
+                            <option value="marksheet">Marksheet/Results</option>
+                            <option value="attendance">Attendance Record</option>
+                            <option value="transcript">Academic Transcript</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancelUpload" class="border border-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-50">
+                            Cancel
+                        </button>
+                        <button type="submit" id="submitBtn" class="bg-[#0099cc] hover:bg-[#0077aa] text-white font-semibold py-2 px-6 rounded-lg flex items-center">
+                            <span id="submitText">Convert to CSV</span>
+                            <i id="submitIcon" class="fas fa-arrow-right ml-2"></i>
+                            <i id="loadingIcon" class="fas fa-spinner fa-spin ml-2 hidden"></i>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <section id="features" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold mb-4">Powerful Features</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    EduParse goes beyond simple conversion with intelligent processing capabilities
+                </p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div class="bg-[#f8f9fa] p-6 rounded-xl hover:shadow-lg transition duration-300">
+                    <div class="w-12 h-12 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center mb-4 text-[#0099cc]">
+                        <i class="fas fa-brain text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Smart Field Detection</h3>
+                    <p class="text-gray-600">
+                        Automatically identifies and organizes student data even from unstructured PDFs with mixed field orders.
+                    </p>
+                </div>
+                <div class="bg-[#f8f9fa] p-6 rounded-xl hover:shadow-lg transition duration-300">
+                    <div class="w-12 h-12 bg-[#7b2cbf] bg-opacity-10 rounded-full flex items-center justify-center mb-4 text-[#7b2cbf]">
+                        <i class="fas fa-magic text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Auto-Fill Missing Data</h3>
+                    <p class="text-gray-600">
+                        Completes grade points and credits automatically based on grade mappings, saving manual entry time.
+                    </p>
+                </div>
+                <div class="bg-[#f8f9fa] p-6 rounded-xl hover:shadow-lg transition duration-300">
+                    <div class="w-12 h-12 bg-[#38b000] bg-opacity-10 rounded-full flex items-center justify-center mb-4 text-[#38b000]">
+                        <i class="fas fa-cloud text-xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Cloud Storage</h3>
+                    <p class="text-gray-600">
+                        Securely stores all your converted files with metadata in Firebase for easy access anytime, anywhere.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section id="how-it-works" class="py-16 bg-[#f5f7fa]">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-bold mb-4">How EduParse Works</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    Simple steps from PDF upload to perfectly structured CSV output
+                </p>
+            </div>
+            <div class="max-w-4xl mx-auto">
+                <div class="relative">
+                    <!-- Timeline line -->
+                    <div class="hidden md:block absolute left-1/2 top-0 h-full w-1 bg-[#0099cc] transform -translate-x-1/2"></div>
+                    
+                    <!-- Timeline items -->
+                    <div class="relative z-10 space-y-10 md:space-y-0">
+                        <!-- Step 1 -->
+                        <div class="md:flex justify-between items-center mb-16">
+                            <div class="md:w-5/12 mb-6 md:mb-0 md:pr-10 text-right">
+                                <div class="bg-white p-6 rounded-xl shadow-md">
+                                    <div class="w-10 h-10 bg-[#0099cc] rounded-full flex items-center justify-center text-white font-bold mb-2 mx-auto md:ml-auto">1</div>
+                                    <h3 class="text-xl font-semibold mb-2">Upload PDF</h3>
+                                    <p class="text-gray-600">
+                                        Faculty members upload academic PDFs through our secure web interface.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="hidden md:block md:w-2/12 flex justify-center">
+                                <div class="w-16 h-16 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center text-[#0099cc]">
+                                    <i class="fas fa-upload text-2xl"></i>
+                                </div>
+                            </div>
+                            <div class="md:w-5/12"></div>
+                        </div>
+                        
+                        <!-- Step 2 -->
+                        <div class="md:flex justify-between items-center mb-16">
+                            <div class="md:w-5/12"></div>
+                            <div class="hidden md:block md:w-2/12 flex justify-center">
+                                <div class="w-16 h-16 bg-[#7b2cbf] bg-opacity-10 rounded-full flex items-center justify-center text-[#7b2cbf]">
+                                    <i class="fas fa-server text-2xl"></i>
+                                </div>
+                            </div>
+                            <div class="md:w-5/12 mb-6 md:mb-0 md:pl-10">
+                                <div class="bg-white p-6 rounded-xl shadow-md">
+                                    <div class="w-10 h-10 bg-[#7b2cbf] rounded-full flex items-center justify-center text-white font-bold mb-2 mx-auto md:mr-auto">2</div>
+                                    <h3 class="text-xl font-semibold mb-2">Backend Processing</h3>
+                                    <p class="text-gray-600">
+                                        Our Flask API parses the PDF, detects fields intelligently, and auto-fills missing data.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 3 -->
+                        <div class="md:flex justify-between items-center mb-16">
+                            <div class="md:w-5/12 mb-6 md:mb-0 md:pr-10 text-right">
+                                <div class="bg-white p-6 rounded-xl shadow-md">
+                                    <div class="w-10 h-10 bg-[#38b000] rounded-full flex items-center justify-center text-white font-bold mb-2 mx-auto md:ml-auto">3</div>
+                                    <h3 class="text-xl font-semibold mb-2">Cloud Storage</h3>
+                                    <p class="text-gray-600">
+                                        The processed CSV is stored in Firebase with all metadata for future access.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="hidden md:block md:w-2/12 flex justify-center">
+                                <div class="w-16 h-16 bg-[#38b000] bg-opacity-10 rounded-full flex items-center justify-center text-[#38b000]">
+                                    <i class="fas fa-database text-2xl"></i>
+                                </div>
+                            </div>
+                            <div class="md:w-5/12"></div>
+                        </div>
+                        
+                        <!-- Step 4 -->
+                        <div class="md:flex justify-between items-center">
+                            <div class="md:w-5/12"></div>
+                            <div class="hidden md:block md:w-2/12 flex justify-center">
+                                <div class="w-16 h-16 bg-[#0099cc] bg-opacity-10 rounded-full flex items-center justify-center text-[#0099cc]">
+                                    <i class="fas fa-file-download text-2xl"></i>
+                                </div>
+                            </div>
+                            <div class="md:w-5/12 mb-6 md:mb-0 md:pl-10">
+                                <div class="bg-white p-6 rounded-xl shadow-md">
+                                    <div class="w-10 h-10 bg-[#0099cc] rounded-full flex items-center justify-center text-white font-bold mb-2 mx-auto md:mr-auto">4</div>
+                                    <h3 class="text-xl font-semibold mb-2">Download & Manage</h3>
+                                    <p class="text-gray-600">
+                                        Faculty can download CSVs immediately or access previous files from their dashboard.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Dashboard Section -->
+    <section id="dashboard" class="py-16 bg-white">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4">Your Conversion Dashboard</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    Access all your converted files and manage them easily
+                </p>
+            </div>
+            
+            <div class="bg-[#f8f9fa] rounded-xl p-6 shadow-inner">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold mb-4 md:mb-0">Recent Conversions</h3>
+                    <div class="flex space-x-3">
+                        <div class="relative">
+                            <select class="appearance-none bg-white border border-gray-300 rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-[#0099cc] text-sm">
+                                <option>All Types</option>
+                                <option>Marksheets</option>
+                                <option>Attendance</option>
+                                <option>Transcripts</option>
+                            </select>
+                            <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                                <i class="fas fa-chevron-down text-gray-400"></i>
+                            </div>
+                        </div>
+                        <button class="bg-white border border-gray-300 rounded-lg px-3 flex items-center text-sm">
+                            <i class="fas fa-filter text-gray-500 mr-1"></i>
+                            <span>Filter</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="min-w-full bg-white rounded-lg overflow-hidden">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">File Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-file-csv text-[#0099cc] mr-3"></i>
+                                        <div>
+                                            <div class="font-medium">Semester1_Results.csv</div>
+                                            <div class="text-sm text-gray-500">2.4 MB</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Marksheet</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">May 15, 2023</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Completed</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <a href="#" class="text-[#0099cc] hover:text-[#0077aa] mr-3"><i class="fas fa-download mr-1"></i> Download</a>
+                                    <a href="#" class="text-gray-600 hover:text-gray-900"><i class="fas fa-trash-alt mr-1"></i> Delete</a>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-file-csv text-[#0099cc] mr-3"></i>
+                                        <div>
+                                            <div class="font-medium">Final_Attendance.csv</div>
+                                            <div class="text-sm text-gray-500">1.8 MB</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Attendance</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">April 28, 2023</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Completed</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <a href="#" class="text-[#0099cc] hover:text-[#0077aa] mr-3"><i class="fas fa-download mr-1"></i> Download</a>
+                                    <a href="#" class="text-gray-600 hover:text-gray-900"><i class="fas fa-trash-alt mr-1"></i> Delete</a>
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <i class="fas fa-file-pdf text-red-500 mr-3"></i>
+                                        <div>
+                                            <div class="font-medium">Midterm_Grades.pdf</div>
+                                            <div class="text-sm text-gray-500">Processing...</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Marksheet</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">June 2, 2023</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Processing</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <span class="text-gray-400 mr-3"><i class="fas fa-download mr-1"></i> Download</span>
+                                    <a href="#" class="text-gray-600 hover:text-gray-900"><i class="fas fa-times-circle mr-1"></i> Cancel</a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="mt-6 flex flex-col md:flex-row justify-between items-center">
+                    <div class="text-sm text-gray-500 mb-4 md:mb-0">
+                        Showing <span class="font-medium">1</span> to <span class="font-medium">3</span> of <span class="font-medium">12</span> files
+                    </div>
+                    <div class="flex space-x-2">
+                        <button class="bg-white border border-gray-300 rounded-lg px-3 py-1 text-sm disabled:opacity-50" disabled>
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button class="bg-[#0099cc] text-white rounded-lg px-3 py-1 text-sm">1</button>
+                        <button class="bg-white border border-gray-300 rounded-lg px-3 py-1 text-sm hover:bg-gray-50">2</button>
+                        <button class="bg-white border border-gray-300 rounded-lg px-3 py-1 text-sm hover:bg-gray-50">3</button>
+                        <button class="bg-white border border-gray-300 rounded-lg px-3 py-1 text-sm hover:bg-gray-50">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Modal -->
+    <div id="resultsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center border-b p-4">
+                <h3 class="text-xl font-bold text-gray-800">Your CSV is Ready!</h3>
+                <button id="closeResultsModal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6 flex-grow overflow-auto">
+                <div class="flex flex-col md:flex-row gap-6 mb-6">
+                    <div class="md:w-1/3 bg-[#f8f9fa] p-4 rounded-lg">
+                        <h4 class="font-semibold mb-3">Conversion Summary</h4>
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Original File:</span>
+                                <span class="font-medium">Results_2023.pdf</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">File Size:</span>
+                                <span class="font-medium">2.1 MB</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Pages Processed:</span>
+                                <span class="font-medium">12</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Students Found:</span>
+                                <span class="font-medium">142</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Auto-filled Fields:</span>
+                                <span class="font-medium">Grade Points, Credits</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Conversion Time:</span>
+                                <span class="font-medium">8.4 seconds</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="md:w-2/3">
+                        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                            <div class="bg-gray-50 px-4 py-2 flex justify-between items-center">
+                                <div class="flex items-center">
+                                    <i class="fas fa-file-csv text-[#0099cc] mr-2"></i>
+                                    <span class="font-medium">Results_2023.csv</span>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button class="text-[#0099cc] hover:text-[#0077aa] text-sm flex items-center">
+                                        <i class="fas fa-download mr-1"></i> Download
+                                    </button>
+                                    <button class="text-gray-600 hover:text-gray-900 text-sm flex items-center">
+                                        <i class="fas fa-share-alt mr-1"></i> Share
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto max-h-96">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Grade</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Points</th>
+                                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Credits</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">101</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">John Doe</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">A</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">9</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">4</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">102</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">Jane Smith</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">B+</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">8</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">4</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">103</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">Robert Johnson</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">A-</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">8.5</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">3</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">104</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">Emily Davis</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">B</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">7</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">4</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">105</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">Michael Wilson</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">A</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">9</td>
+                                            <td class="px-4 py-2 whitespace-nowrap text-sm">4</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="bg-gray-50 px-4 py-2 text-right text-sm text-gray-500">
+                                Showing 5 of 142 records
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-info-circle text-blue-500 mt-1"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-blue-800">Conversion Notes</h3>
+                            <div class="mt-2 text-sm text-blue-700">
+                                <p>
+                                    Your document has been successfully processed. The system automatically organized all fields and filled any missing grade points or credits.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="border-t p-4 flex justify-end">
+                <button id="closeResultsBtn" class="bg-[#0099cc] hover:bg-[#0077aa] text-white font-semibold py-2 px-6 rounded-lg">
+                    Done
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact Section -->
+    <section id="contact" class="py-16 bg-[#f5f7fa]">
+        <div class="container mx-auto px-4">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold mb-4">Have Questions?</h2>
+                <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+                    Get in touch with our team for support or feature requests
+                </p>
+            </div>
+            <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+                <div class="md:flex">
+                    <div class="md:w-1/2 bg-gradient-to-br from-[#0099cc] to-[#7b2cbf] p-8 text-white">
+                        <h3 class="text-xl font-semibold mb-4">Contact Information</h3>
+                        <div class="space-y-4">
+                            <div class="flex items-start">
+                                <i class="fas fa-envelope mt-1 mr-3"></i>
+                                <div>
+                                    <h4 class="font-medium">Email Us</h4>
+                                    <p class="text-sm opacity-90">support@eduparse.com</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start">
+                                <i class="fas fa-phone-alt mt-1 mr-3"></i>
+                                <div>
+                                    <h4 class="font-medium">Call Us</h4>
+                                    <p class="text-sm opacity-90">+1 (555) 123-4567</p>
+                                </div>
+                            </div>
+                            <div class="flex items-start">
+                                <i class="fas fa-map-marker-alt mt-1 mr-3"></i>
+                                <div>
+                                    <h4 class="font-medium">Visit Us</h4>
+                                    <p class="text-sm opacity-90">123 Tech Park, Silicon Valley, CA 94025</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8">
+                            <h3 class="text-xl font-semibold mb-4">Follow Us</h3>
+                            <div class="flex space-x-4">
+                                <a href="#" class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center hover:bg-opacity-30 transition">
+                                    <i class="fab fa-twitter"></i>
+                                </a>
+                                <a href="#" class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center hover:bg-opacity-30 transition">
+                                    <i class="fab fa-linkedin-in"></i>
+                                </a>
+                                <a href="#" class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center hover:bg-opacity-30 transition">
+                                    <i class="fab fa-facebook-f"></i>
+                                </a>
+                                <a href="#" class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center hover:bg-opacity-30 transition">
+                                    <i class="fab fa-github"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="md:w-1/2 p-8">
+                        <h3 class="text-xl font-semibold mb-6 text-gray-800">Send us a message</h3>
+                        <form>
+                            <div class="mb-4">
+                                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                                <input type="text" id="name" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0099cc] focus:border-transparent">
+                            </div>
+                            <div class="mb-4">
+                                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                                <input type="email" id="email" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0099cc] focus:border-transparent">
+                            </div>
+                            <div class="mb-4">
+                                <label for="subject" class="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                                <input type="text" id="subject" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0099cc] focus:border-transparent">
+                            </div>
+                            <div class="mb-4">
+                                <label for="message" class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                                <textarea id="message" rows="4" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#0099cc] focus:border-transparent"></textarea>
+                            </div>
+                            <button type="submit" class="bg-[#0099cc] hover:bg-[#0077aa] text-white font-semibold py-2 px-6 rounded-lg w-full">
+                                Send Message
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white py-12">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="icon-container">
+                            <div class="document"></div>
+                            <div class="document"></div>
+                            <div class="document"></div>
+                            <div class="grid-lines"></div>
+                            <div class="arrow"><i class="fas fa-arrow-right"></i></div>
+                        </div>
+                        <h1 class="text-xl font-bold">
+                            <span class="text-[#0099cc]">Edu</span><span class="text-[#7b2cbf]">Parse</span>
+                        </h1>
+                    </div>
+                    <p class="text-gray-400 text-sm">
+                        Smart PDF to CSV conversion for educational institutions. 
+                        Automate your academic data processing with AI-powered precision.
+                    </p>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Quick Links</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Home</a></li>
+                        <li><a href="#features" class="text-gray-400 hover:text-white transition">Features</a></li>
+                        <li><a href="#how-it-works" class="text-gray-400 hover:text-white transition">How It Works</a></li>
+                        <li><a href="#dashboard" class="text-gray-400 hover:text-white transition">Dashboard</a></li>
+                        <li><a href="#contact" class="text-gray-400 hover:text-white transition">Contact</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Resources</h3>
+                    <ul class="space-y-2">
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Documentation</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">API Reference</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Tutorials</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">Blog</a></li>
+                        <li><a href="#" class="text-gray-400 hover:text-white transition">FAQ</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Subscribe</h3>
+                    <p class="text-gray-400 text-sm mb-4">
+                        Stay updated with our latest features and news.
+                    </p>
+                    <form class="flex">
+                        <input type="email" placeholder="Your email" class="bg-gray-800 text-white px-3 py-2 rounded-l-lg focus:outline-none focus:ring-1 focus:ring-[#0099cc] w-full">
+                        <button type="submit" class="bg-[#0099cc] hover:bg-[#0077aa] px-4 py-2 rounded-r-lg">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
+                <p class="text-gray-400 text-sm mb-4 md:mb-0">
+                    &copy; 2023 EduParse. All rights reserved.
+                </p>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i class="fab fa-twitter"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i class="fab fa-linkedin-in"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i class="fab fa-facebook-f"></i>
+                    </a>
+                    <a href="#" class="text-gray-400 hover:text-white transition">
+                        <i class="fab fa-github"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Firebase configuration (replace with your actual config)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCvmnh4zxSblPwteVOxpWRNsHjpdRkwAjQ",
+            authDomain: "eduparser.firebaseapp.com",
+            projectId: "eduparser",
+            storageBucket: "eduparser.firebasestorage.app",
+            messagingSenderId: "447367704643",
+            appId: "1:447367704643:web:1043a90bbb3cfb1a29e4f6",
+            measurementId: "G-DP6WQQFZB8",
+            databaseURL: "https://eduparser-default-rtdb.firebaseio.com/"
+        };
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const storage = firebase.storage();
+        const db = firebase.firestore();
+        
+        // DOM elements
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadModal = document.getElementById('uploadModal');
+        const closeModal = document.getElementById('closeModal');
+        const cancelUpload = document.getElementById('cancelUpload');
+        const fileInput = document.getElementById('fileInput');
+        const dropzone = document.getElementById('dropzone');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const removeFile = document.getElementById('removeFile');
+        const uploadForm = document.getElementById('uploadForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const submitText = document.getElementById('submitText');
+        const submitIcon = document.getElementById('submitIcon');
+        const loadingIcon = document.getElementById('loadingIcon');
+        const resultsModal = document.getElementById('resultsModal');
+        const closeResultsModal = document.getElementById('closeResultsModal');
+        const closeResultsBtn = document.getElementById('closeResultsBtn');
+        
+        // Event listeners
+        uploadBtn.addEventListener('click', () => {
+            uploadModal.classList.remove('hidden');
+        });
+        
+        closeModal.addEventListener('click', () => {
+            uploadModal.classList.add('hidden');
+        });
+        
+        cancelUpload.addEventListener('click', () => {
+            uploadModal.classList.add('hidden');
+            resetForm();
+        });
+        
+        closeResultsModal.addEventListener('click', () => {
+            resultsModal.classList.add('hidden');
+        });
+        
+        closeResultsBtn.addEventListener('click', () => {
+            resultsModal.classList.add('hidden');
+        });
+        
+        // File input handling
+        fileInput.addEventListener('change', handleFileSelect);
+        
+        // Drag and drop handling
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight() {
+            dropzone.classList.add('active');
+        }
+        
+        function unhighlight() {
+            dropzone.classList.remove('active');
+        }
+        
+        dropzone.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length) {
+                fileInput.files = files;
+                handleFileSelect({ target: fileInput });
+            }
+        }
+        
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file && file.type === 'application/pdf') {
+                displayFileInfo(file);
+            } else {
+                alert('Please select a PDF file.');
+                resetForm();
+            }
+        }
+        
+        function displayFileInfo(file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = formatFileSize(file.size);
+            fileInfo.classList.remove('hidden');
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        removeFile.addEventListener('click', () => {
+            resetForm();
+        });
+        
+        function resetForm() {
+            fileInput.value = '';
+            fileInfo.classList.add('hidden');
+        }
+        
+        // Form submission
+       uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Show loading state
+    submitText.textContent = 'Processing...';
+    submitIcon.classList.add('hidden');
+    loadingIcon.classList.remove('hidden');
+    submitBtn.disabled = true;
+
+    const file = fileInput.files[0];
+    const documentType = document.getElementById('documentType').value;
+    const institution = document.getElementById('institution').value;
+
+    if (!file) {
+        alert('Please select a PDF file');
+        resetForm();
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('pdf', file);
+    formData.append('documentType', documentType);  // (Optional) Send if needed
+    formData.append('institution', institution);    // (Optional) Send if needed
+
+    try {
+        // Call Flask Backend API
+        const response = await fetch('http://localhost:5000/upload-pdf', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+        if (data.download_url) {
+            uploadModal.classList.add('hidden');
+            resultsModal.classList.remove('hidden');
+
+            // Dynamically update download link with CSV URL
+            document.querySelectorAll('.resultsModal a').forEach(link => {
+                link.href = data.download_url;
+            });
+
+            alert('CSV File is ready for download!');
+        } else {
+            alert('Failed to process file. Please try again.');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error uploading file. Please check backend connection.');
+    } finally {
+        resetForm();
+        submitText.textContent = 'Convert to CSV';
+        submitIcon.classList.remove('hidden');
+        loadingIcon.classList.add('hidden');
+        submitBtn.disabled = false;
+    }
+});
+
+        
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') return;
+                
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
